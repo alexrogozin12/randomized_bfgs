@@ -29,6 +29,3 @@ class GradientDescent(BaseMethod):
         if self.alpha_k is None:
             return
         self.x_k = self.x_k - self.alpha_k * self.grad_k
-
-#     def stopping_criteria(self):
-#         return np.linalg.norm(self.grad_k)**2 <= self.tolerance * self.grad_norm_0**2

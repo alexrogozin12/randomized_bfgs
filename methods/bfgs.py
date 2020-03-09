@@ -28,8 +28,6 @@ class BFGS(BaseMethod):
             self.alpha_0 = 1.
         
         self.grad_k = self.oracle.grad(self.x_k)
-#         self.x_k_old = self.x_k.copy()
-#         self.grad_k_old = self.oracle.grad(self.x_k).copy()
 
     def step(self):
         self.x_k_old = self.x_k.copy()
@@ -47,9 +45,6 @@ class BFGS(BaseMethod):
         self.s_k = (self.x_k - self.x_k_old).reshape((self.x_k.shape[0], 1))
         self.y_k = (self.grad_k - self.grad_k_old).reshape((self.x_k.shape[0], 1))
         den = self.s_k.flatten().dot(self.y_k.flatten())
-        self.H_k -= self.H_k.dot(self.y_k).dot(self.s_k.T) / den # right multiply
-        self.H_k -= (self.H_k.dot(self.y_k).dot(self.s_k.T) / den).T # left multiply
-        self.H_k += self.s_k.dot(self.s_k.T) / den
-
-#     def stopping_criteria(self):
-#         return np.linalg.norm(self.grad_k)**2 <= self.tolerance * self.grad_norm_0**2
+        self.H_k -= self.H_k.dot(self.y_k).dot(self.s_k.T) / (den + 1e-8) # right multiply
+        self.H_k -= (self.H_k.dot(self.y_k).dot(self.s_k.T) / (den + 1e-8)).T # left multiply
+        self.H_k += self.s_k.dot(self.s_k.T) / (den + 1e-8)

@@ -5,23 +5,6 @@ from oracles import BaseSmoothOracle
 
 
 class LogRegL2Oracle(BaseSmoothOracle):
-    """
-    Oracle for logistic regression with l2 regularization:
-         func(x) = 1/m sum_i log(1 + exp(-b_i * a_i^T x)) + regcoef / 2 ||x||_2^2.
-
-    Let A and b be parameters of the logistic regression (feature matrix
-    and labels vector respectively).
-    For user-friendly interface use create_log_reg_oracle()
-
-    Parameters
-    ----------
-        matvec_Ax : function
-            Computes matrix-vector product Ax, where x is a vector of size n.
-        matvec_ATx : function of x
-            Computes matrix-vector product A^Tx, where x is a vector of size m.
-        matmat_ATsA : function
-            Computes matrix-matrix-matrix product A^T * Diag(s) * A,
-    """
     def __init__(self, matvec_Ax, matvec_ATx, matmat_ATsA, b, regcoef):
         self.matvec_Ax = matvec_Ax
         self.matvec_ATx = matvec_ATx
@@ -41,10 +24,8 @@ class LogRegL2Oracle(BaseSmoothOracle):
     def grad(self, x):
         m = self.b.shape[0]
         degrees = -np.multiply(self.b, self.matvec_Ax(x))
-        # print('degrees.shape = {}, b.shape={}, m = {}'
-        #       .format(degrees.shape, self.b.shape, m))
-        sigmas = expit(degrees)
-        return -1 / m * self.matvec_ATx(np.multiply(sigmas, self.b)) + self.regcoef * x
+        self.sigmas = expit(degrees)
+        return -1 / m * self.matvec_ATx(np.multiply(self.sigmas, self.b)) + self.regcoef * x
 
     def hess(self, x):
         m = self.b.shape[0]
@@ -58,19 +39,18 @@ class LogRegL2Oracle(BaseSmoothOracle):
     def hess_mat_prod(self, x, S):
         m = self.b.shape[0]
         n = x.size
-        degrees = -np.multiply(self.b, self.matvec_Ax(x))
-        sigmas = expit(degrees)
-        diagonal = np.multiply(self.b**2, sigmas)
-        diagonal = np.multiply(diagonal, 1 - sigmas)
-        res = np.multiply(diagonal.reshape(diagonal.shape[0], 1), self.matvec_Ax(S))
-        return np.array(1 / m * self.matvec_ATx(res)) + self.regcoef * S
+        diagonal = np.multiply(self.b**2, self.sigmas)
+        diagonal = np.multiply(diagonal, 1 - self.sigmas)
+        AS = self.matvec_Ax(S)
+        if isinstance(AS, np.ndarray):
+            res = np.multiply(diagonal.reshape(diagonal.shape[0], 1), AS)
+            return np.array(1 / m * self.matvec_ATx(res)) + self.regcoef * S
+        else:
+            res = AS.multiply(diagonal.reshape(diagonal.shape[0], 1))
+            return 1 / m * self.matvec_ATx(res) + self.regcoef * S
 
 
-def create_log_reg_oracle(A, b, regcoef, oracle_type='usual'):
-    """
-    Auxiliary function for creating logistic regression oracles.
-        `oracle_type` must be either 'usual' or 'optimized'
-    """
+def create_log_reg_oracle(A, b, regcoef):
     matvec_Ax = lambda x: A.dot(x) if isinstance(A, np.ndarray) \
         else A.tocsr() * x
     matvec_ATx = lambda x: A.T.dot(x) if isinstance(A, np.ndarray) \

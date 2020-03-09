@@ -49,9 +49,6 @@ class LBFGS(BaseMethod):
         self.lbfgs_queue.append((self.x_k - self.old_x_k, 
                                  self.oracle.grad(self.x_k) - self.old_grad_k))
 
-#     def stopping_criteria(self):
-#         return np.linalg.norm(self.grad_k)**2 <= self.tolerance * self.grad_norm_0**2
-    
     def lbfgs_mul(self, v, memory, gamma_0):
         if len(memory) == 0:
             return gamma_0 * v

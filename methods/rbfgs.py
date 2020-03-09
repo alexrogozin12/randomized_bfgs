@@ -10,9 +10,14 @@ from methods.line_search import get_line_search_tool
 class RBFGS(BaseMethod):
     def __init__(self, oracle, x_0, s_distr, tolerance=1e-10, B_0=None, 
                  line_search_options=None, stopping_criteria='grad_rel', 
+                 store_search_directions=False, update_every_iteration=False, 
                  trace=True):
         
         super(RBFGS, self).__init__(oracle, x_0, stopping_criteria, trace)
+        if store_search_directions and \
+           not isinstance(s_distr, (ConstantDistribution, CustomDiscrete)):
+            raise ValueError('Storing search directions only available for ConstantDistribution and CustomDiscrete')
+        
         self.s_distr = s_distr
         self.d = x_0.shape[0]
         if B_0 is not None:
@@ -26,8 +31,18 @@ class RBFGS(BaseMethod):
         self.line_search_tool = get_line_search_tool(line_search_options)
         self.grad_norm_0 = np.linalg.norm(self.oracle.grad(x_0))
         self.tolerance = tolerance
+        self.store_search_directions = store_search_directions
+        self.update_every_iteration = update_every_iteration
+        self.iter_count = 0
+        
+        if store_search_directions:
+            self.prev_directions = np.random.normal(
+                0., 1., (self.d, self.s_distr.mat.shape[1]))
 
     def step(self):
+        if self.store_search_directions and self.iter_count % self.s_distr.mat.shape[1] == 0:
+            self.s_distr.mat = self.prev_directions
+        
         self.grad_k = self.oracle.grad(self.x_k)
         
         S = self.s_distr.sample()
@@ -50,9 +65,12 @@ class RBFGS(BaseMethod):
             last_func_val = self.oracle.func(self.x_k)
         if self.oracle.func(x_k_new) < last_func_val:
             self.x_k = x_k_new
-
-#     def stopping_criteria(self):
-#         return np.linalg.norm(self.grad_k)**2 <= self.tolerance * self.grad_norm_0**2
+        
+        if self.store_search_directions:
+            self.prev_directions[:, self.iter_count % self.s_distr.mat.shape[1]] = d_k
+            if self.update_every_iteration:
+                self.s_distr.mat[:, self.iter_count % self.s_distr.mat.shape[1]] = d_k
+        self.iter_count += 1
 
     def update_B(self):
         S = self.s_distr.sample()
@@ -96,10 +114,10 @@ class Gaussian(MatrixDistribution):
         return np.random.normal(loc=self.mean, scale=self.std, size=self.size)
 
 
-class Identity(MatrixDistribution):
-    def __init__(self, d):
-        super(Identity, self).__init__()
-        self.mat = np.eye(d)
+class ConstantDistribution(MatrixDistribution):
+    def __init__(self, mat):
+        super(ConstantDistribution, self).__init__()
+        self.mat = mat.copy()
     
     def sample(self):
         return self.mat
@@ -109,7 +127,7 @@ class CustomDiscrete(MatrixDistribution):
     '''
     Sample a set of random columns from given matrix.
     '''
-    def __init__(self, mat, probs=None, size=None):
+    def __init__(self, mat, probs=None, size=None, sort_ids=False):
         super(CustomDiscrete, self).__init__()
         self.mat = mat.copy()
         self.probs = probs or np.ones(mat.shape[1]) / mat.shape[1]
@@ -117,7 +135,11 @@ class CustomDiscrete(MatrixDistribution):
             raise ValueError('Probabilities should sum to 1')
         self.size = size or 1
         self.ids = np.arange(0, mat.shape[1])
+        self.sort_ids = sort_ids
     
     def sample(self):
-        return self.mat[:, np.random.choice(self.ids, replace=False, 
-                                            p=self.probs, size=self.size)]
+        ids = np.random.choice(self.ids, replace=False, 
+                               p=self.probs, size=self.size)
+        if self.sort_ids:
+            ids = np.sort(ids)
+        return self.mat[:, ids]

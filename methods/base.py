@@ -21,7 +21,7 @@ class BaseMethod(object):
             raise ValueError('Unknown stopping criteria type: "{}"'\
                              .format(stopping_criteria))
     
-    def run(self, max_iter=10):
+    def run(self, max_iter=10, max_time=1200):
         if not hasattr(self, 'hist'):
             self.hist = defaultdict(list)
         if not hasattr(self, 'time'):
@@ -29,8 +29,9 @@ class BaseMethod(object):
         
         self._absolute_time = datetime.now()
         try:
-#             for iter_count in tqdm_notebook(range(max_iter)):
             for iter_count in range(max_iter):
+                if self.time > max_time:
+                    break
                 if self.trace:
                     self._update_history()
                 self.step()
@@ -48,6 +49,9 @@ class BaseMethod(object):
         self._absolute_time = now
         self.hist['func'].append(self.oracle.func(self.x_k))
         self.hist['time'].append(self.time)
+        if not hasattr(self, 'grad_k'):
+            self.grad_k = self.oracle.grad(self.x_k)
+        self.hist['grad_norm'].append(npla.norm(self.grad_k))
 
     def step(self):
         raise NotImplementedError('step() not implemented!')
@@ -59,12 +63,7 @@ class BaseMethod(object):
         return npla.norm(self.grad_k)**2 <= self.tolerance
     
     def stopping_criteria_func_absolute(self):
-#         print('stopping_criteria_func_absolute: func = {}, tolerance={}'
-#               .format(self.oracle.func(self.x_k), self.tolerance))
         return self.oracle.func(self.x_k) < self.tolerance
     
     def stopping_criteria_none(self):
         return False
-    
-#     def stopping_criteria(self):
-#         raise NotImplementedError('stopping_criteria() not implemented!')

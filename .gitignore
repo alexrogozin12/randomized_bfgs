@@ -1,0 +1,13 @@
+*ipynb_checkpoints*
+*__pycache__*
+experiments/datasets
+experiments/logreg_solutions
+experiments/results
+
+*.aux
+*.bbl
+*.blg
+*.log
+*.out
+*.pdf
+*.synctex.gz
